@@ -1,0 +1,53 @@
+# 编译产物
+*.o
+*.d
+*.axf
+*.hex
+*.bin
+*.htm
+*.lnp
+*.lst
+*.map
+*.crf
+*.dep
+*.i
+*.tra
+*.fed
+*.l2p
+*.plg
+build*.log
+flash*.log
+*.log
+
+# Keil 用户配置
+*.uvguix.*
+*.uvoptx
+
+# 大文件（手册、库）
+*.pdf
+*.lib
+*.a
+*.zip
+*.7z
+
+# 调试数据
+*.json
+*.txt
+!docs/**/*.md
+
+# 临时文件
+*.tmp
+*.o
+display.o
+main.o
+oscilloscope.o
+
+# VS Code
+.vscode/
+
+# CodeGraph
+.codegraph/
+
+# Python 缓存
+__pycache__/
+*.pyc
