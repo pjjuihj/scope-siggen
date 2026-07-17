@@ -103,18 +103,18 @@ typedef struct {
 /**
   * @brief  测试套件定义宏
   */
-#define TEST_SUITE_BEGIN(name) \
-    static TestCase_t name##_cases[] = {
+#define TEST_SUITE_BEGIN(suite_name) \
+    static TestCase_t suite_name##_cases[] = {
 
 #define TEST_CASE_ENTRY(name) \
     { #name, test_##name },
 
-#define TEST_SUITE_END(name) \
+#define TEST_SUITE_END(suite_name) \
     }; \
-    static TestSuite_t name = { \
-        .name = #name, \
-        .cases = name##_cases, \
-        .count = sizeof(name##_cases) / sizeof(name##_cases[0]), \
+    static TestSuite_t suite_name = { \
+        .name = #suite_name, \
+        .cases = suite_name##_cases, \
+        .count = sizeof(suite_name##_cases) / sizeof(suite_name##_cases[0]), \
         .passed = 0, \
         .failed = 0, \
         .skipped = 0 \

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>示波器信号发生器上位机</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 顶部状态栏 -->
+        <header class="header">
+            <h1>📊 示波器信号发生器上位机</h1>
+            <div class="status-bar">
+                <span id="connectionStatus" class="status disconnected">● 未连接</span>
+                <span id="deviceInfo" class="device-info"></span>
+            </div>
+        </header>
+
+        <!-- 主要内容区 -->
+        <main class="main-content">
+            <!-- 左侧控制面板 -->
+            <aside class="control-panel">
+                <!-- 串口连接 -->
+                <section class="panel-section">
+                    <h3>🔌 串口连接</h3>
+                    <div class="form-group">
+                        <label>串口:</label>
+                        <div class="port-select">
+                            <select id="portSelect">
+                                <option value="">选择串口...</option>
+                            </select>
+                            <button id="refreshPorts" class="btn-small">刷新</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>波特率:</label>
+                        <select id="baudRate">
+                            <option value="9600">9600</option>
+                            <option value="19200">19200</option>
+                            <option value="38400">38400</option>
+                            <option value="57600">57600</option>
+                            <option value="115200" selected>115200</option>
+                            <option value="230400">230400</option>
+                            <option value="460800">460800</option>
+                            <option value="921600">921600</option>
+                        </select>
+                    </div>
+                    <div class="button-group">
+                        <button id="connectBtn" class="btn btn-primary">连接</button>
+                        <button id="disconnectBtn" class="btn btn-danger" disabled>断开</button>
+                    </div>
+                </section>
+
+                <!-- 示波器控制 -->
+                <section class="panel-section">
+                    <h3>📈 示波器控制</h3>
+                    <div class="form-group">
+                        <label>采样率:</label>
+                        <select id="sampleRate">
+                            <option value="1000">1 kHz</option>
+                            <option value="10000">10 kHz</option>
+                            <option value="100000">100 kHz</option>
+                            <option value="1000000" selected>1 MHz</option>
+                            <option value="10000000">10 MHz</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>缓冲区大小:</label>
+                        <select id="bufferSize">
+                            <option value="256">256</option>
+                            <option value="512">512</option>
+                            <option value="1024" selected>1024</option>
+                            <option value="2048">2048</option>
+                        </select>
+                    </div>
+                    <div class="button-group">
+                        <button id="scopeStartBtn" class="btn btn-success">开始采集</button>
+                        <button id="scopeStopBtn" class="btn btn-warning" disabled>停止采集</button>
+                    </div>
+                    <div class="button-group" style="margin-top: 8px;">
+                        <button id="sendWaveformBtn" class="btn btn-primary">发送波形</button>
+                        <button id="streamOnBtn" class="btn btn-success">启用流式</button>
+                        <button id="streamOffBtn" class="btn btn-warning">禁用流式</button>
+                    </div>
+                </section>
+
+                <!-- 信号发生器控制 -->
+                <section class="panel-section">
+                    <h3>🔊 信号发生器</h3>
+                    <div class="form-group">
+                        <label>波形类型:</label>
+                        <select id="waveformType">
+                            <option value="sine">正弦波</option>
+                            <option value="square">方波</option>
+                            <option value="triangle">三角波</option>
+                            <option value="sawtooth">锯齿波</option>
+                            <option value="dc">直流</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>频率 (Hz):</label>
+                        <input type="number" id="waveformFreq" value="1000" min="1" max="100000">
+                    </div>
+                    <div class="form-group">
+                        <label>幅度 (V):</label>
+                        <input type="number" id="waveformAmp" value="3.3" min="0" max="3.3" step="0.1">
+                    </div>
+                    <div class="button-group">
+                        <button id="sigGenStartBtn" class="btn btn-success">启动信号源</button>
+                        <button id="sigGenStopBtn" class="btn btn-warning" disabled>停止信号源</button>
+                    </div>
+                </section>
+
+                <!-- 命令控制台 -->
+                <section class="panel-section">
+                    <h3>💻 命令控制台</h3>
+                    <div class="console-input">
+                        <input type="text" id="commandInput" placeholder="输入命令...">
+                        <button id="sendCmdBtn" class="btn-small">发送</button>
+                    </div>
+                    <div class="quick-commands">
+                        <button class="cmd-btn" data-cmd="help">帮助</button>
+                        <button class="cmd-btn" data-cmd="status">状态</button>
+                        <button class="cmd-btn" data-cmd="tasks">任务</button>
+                        <button class="cmd-btn" data-cmd="memory">内存</button>
+                        <button class="cmd-btn" data-cmd="version">版本</button>
+                        <button class="cmd-btn" data-cmd="errors">错误</button>
+                    </div>
+                </section>
+            </aside>
+
+            <!-- 右侧显示区域 -->
+            <div class="display-area">
+                <!-- 示波器屏幕 -->
+                <section class="waveform-section">
+                    <div class="waveform-header">
+                        <h3>📊 示波器</h3>
+                        <div class="waveform-controls">
+                            <button id="clearWaveform" class="btn-small">清除</button>
+                            <button id="pauseWaveform" class="btn-small">暂停</button>
+                            <label>
+                                <input type="checkbox" id="autoScale" checked> 自动缩放
+                            </label>
+                        </div>
+                    </div>
+                    <div class="oscilloscope-info">
+                        <div class="info-item">
+                            <label>时基:</label>
+                            <span id="timebase">100 μs/div</span>
+                        </div>
+                        <div class="info-item">
+                            <label>电压:</label>
+                            <span id="voltageScale">1 V/div</span>
+                        </div>
+                        <div class="info-item">
+                            <label>触发:</label>
+                            <span id="triggerMode">自动</span>
+                        </div>
+                        <div class="info-item">
+                            <label>采样率:</label>
+                            <span id="sampleRateDisplay">1 MHz</span>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="waveformChart"></canvas>
+                    </div>
+                </section>
+
+                <!-- 测量数据 -->
+                <section class="measurements-section">
+                    <h3>测量数据</h3>
+                    <div class="measurements-grid">
+                        <div class="measurement-card">
+                            <label>频率</label>
+                            <span id="freqValue">-- Hz</span>
+                        </div>
+                        <div class="measurement-card">
+                            <label>峰峰值</label>
+                            <span id="ppValue">-- V</span>
+                        </div>
+                        <div class="measurement-card">
+                            <label>最小值</label>
+                            <span id="minValue">-- V</span>
+                        </div>
+                        <div class="measurement-card">
+                            <label>最大值</label>
+                            <span id="maxValue">-- V</span>
+                        </div>
+                        <div class="measurement-card">
+                            <label>采样率</label>
+                            <span id="sampleRateValue">-- kSa/s</span>
+                        </div>
+                        <div class="measurement-card">
+                            <label>缓冲区</label>
+                            <span id="bufferSizeValue">-- samples</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 日志输出 -->
+                <section class="log-section">
+                    <div class="log-header">
+                        <h3>日志输出</h3>
+                        <button id="clearLog" class="btn-small">清除</button>
+                    </div>
+                    <div id="logOutput" class="log-output"></div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

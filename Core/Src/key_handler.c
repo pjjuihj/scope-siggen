@@ -155,8 +155,7 @@ void Key_Task(void *argument)
 {
     LOG_INFO("Key task started");
 
-    /* 初始化 */
-    KeyHandler_Init();
+    /* 初始化已在 app_init.c 中完成，此处不再重复 */
 
     for (;;) {
         /* 扫描按键 */

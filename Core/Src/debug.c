@@ -54,8 +54,8 @@ static void Debug_PrintHelp(void);
 
 ErrorCode_t Debug_Init(void)
 {
-    /* 设置日志级别 - 只输出错误，避免干扰命令接收 */
-    current_log_level = LOG_ERROR;
+    /* 设置日志级别 - 输出 INFO 及以上级别 */
+    current_log_level = LOG_INFO;
     initialized = true;
 
     return ERR_OK;

@@ -72,7 +72,7 @@ typedef struct {
 #define VERSION_BUILD      0
 
 /* 版本字符串 */
-#define VERSION_STRING     "1.4.0"
+#define VERSION_STRING     "1.4.1"
 
 /* Git信息（由构建脚本自动填充） */
 #define GIT_COMMIT         "20fa254"

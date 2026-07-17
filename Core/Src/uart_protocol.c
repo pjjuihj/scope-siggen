@@ -19,6 +19,7 @@
 #include "app_init.h"
 #include "version.h"
 #include "debug.h"
+#include "error_tracker.h"
 #include "cmsis_os.h"
 #include <string.h>
 #include <stdio.h>
@@ -79,6 +80,10 @@ static void UART_HandleSave(const char *param);
 static void UART_HandleLoad(const char *param);
 static void UART_HandleShutdown(const char *param);
 static void UART_HandleReset(const char *param);
+static void UART_HandleTasks(const char *param);
+static void UART_HandleMemory(const char *param);
+static void UART_HandleErrors(const char *param);
+static void UART_HandleLogLevel(const char *param);
 
 /* 环形缓冲区操作 */
 static void UART_RxBuffer_Put(uint8_t byte);
@@ -149,6 +154,11 @@ static const CommandEntry_t cmd_table[] = {
     {"load",        4,       false,     UART_HandleLoad},
     {"shutdown",    8,       false,     UART_HandleShutdown},
     {"reset",       5,       false,     UART_HandleReset},
+    /* 调试命令 */
+    {"tasks",       5,       false,     UART_HandleTasks},
+    {"memory",      6,       false,     UART_HandleMemory},
+    {"errors",      6,       false,     UART_HandleErrors},
+    {"log",         3,       true,      UART_HandleLogLevel},
 };
 #define CMD_TABLE_SIZE (sizeof(cmd_table) / sizeof(cmd_table[0]))
 
@@ -257,13 +267,31 @@ ErrorCode_t UART_ReceiveCommand(char *cmd, uint16_t max_len)
         return ERR_TIMEOUT;
     }
 
-    /* 读取完整命令 */
+    /* 读取完整命令（直到遇到换行符） */
     while (i < max_len - 1 && UART_RxBuffer_Get(&byte)) {
         if (byte == '\r' || byte == '\n') {
             cmd[i] = '\0';
             return ERR_OK;
         }
         cmd[i++] = byte;
+    }
+
+    /* 如果缓冲区为空但命令未结束，等待更多数据 */
+    if (i < max_len - 1) {
+        /* 等待最多 100ms 让更多数据到达 */
+        uint32_t start = HAL_GetTick();
+        while (HAL_GetTick() - start < 100) {
+            if (UART_RxBuffer_Get(&byte)) {
+                if (byte == '\r' || byte == '\n') {
+                    cmd[i] = '\0';
+                    return ERR_OK;
+                }
+                if (i < max_len - 1) {
+                    cmd[i++] = byte;
+                }
+            }
+            osDelay(1);
+        }
     }
 
     cmd[i] = '\0';
@@ -283,6 +311,9 @@ ErrorCode_t UART_ExecuteCommand(const char *cmd_str)
         return ERR_INVALID_PARAM;
     }
 
+    /* 记录收到的命令 */
+    LOG_DEBUG("RX: %s", cmd_str);
+
     /* 遍历命令表 */
     for (uint64_t i = 0; i < CMD_TABLE_SIZE; i++) {
         uint8_t len = cmd_table[i].min_len;
@@ -295,12 +326,21 @@ ErrorCode_t UART_ExecuteCommand(const char *cmd_str)
                     const char *space = strchr(cmd_str, ' ');
                     param = (space != NULL) ? (space + 1) : NULL;
                 }
+
+                /* 记录命令执行 */
+                LOG_DEBUG("CMD: %s (param: %s)", cmd_table[i].name,
+                          param ? param : "none");
+
                 cmd_table[i].handler(param);
+
+                /* 记录命令完成 */
+                LOG_DEBUG("CMD: %s done", cmd_table[i].name);
                 return ERR_OK;
             }
         }
     }
 
+    LOG_WARNING("Unknown command: %s", cmd_str);
     UART_SendText("ERROR:Unknown command\r\n");
     return ERR_UNKNOWN;
 }
@@ -322,6 +362,7 @@ void UART_Task(void *argument)
 
         /* 接收并执行命令 */
         if (UART_ReceiveCommand(cmd, sizeof(cmd)) == ERR_OK) {
+            LOG_DEBUG("Received command: %s", cmd);
             UART_ExecuteCommand(cmd);
         }
 
@@ -360,6 +401,11 @@ static void UART_HandleHelp(const char *param)
     UART_SendText("load           - Load config from Flash\r\n");
     UART_SendText("shutdown       - Safe shutdown\r\n");
     UART_SendText("reset          - System reset\r\n");
+    UART_SendText("\r\n=== Debug Commands ===\r\n");
+    UART_SendText("tasks          - Show task status\r\n");
+    UART_SendText("memory         - Show memory status\r\n");
+    UART_SendText("errors         - Show error history\r\n");
+    UART_SendText("log <0-4>      - Set log level (0=DEBUG, 4=FATAL)\r\n");
     UART_SendText("OK:help\r\n");
 }
 
@@ -748,4 +794,42 @@ static void UART_HandleReset(const char *param)
     UART_SendText("OK:reset\r\n");
     HAL_Delay(100);
     NVIC_SystemReset();
+}
+
+static void UART_HandleTasks(const char *param)
+{
+    (void)param;
+    Debug_PrintTaskStatus();
+    UART_SendText("OK:tasks\r\n");
+}
+
+static void UART_HandleMemory(const char *param)
+{
+    (void)param;
+    Debug_PrintMemoryStatus();
+    UART_SendText("OK:memory\r\n");
+}
+
+static void UART_HandleErrors(const char *param)
+{
+    (void)param;
+    ErrorTracker_PrintHistory();
+    UART_SendText("OK:errors\r\n");
+}
+
+static void UART_HandleLogLevel(const char *param)
+{
+    if (param == NULL) {
+        UART_SendText("ERROR:missing level\r\n");
+        return;
+    }
+
+    int level = atoi(param);
+    if (level < 0 || level > 4) {
+        UART_SendText("ERROR:invalid level (0-4)\r\n");
+        return;
+    }
+
+    Debug_SetLogLevel((LogLevel_t)level);
+    UART_SendText("OK:log\r\n");
 }

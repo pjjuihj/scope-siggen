@@ -430,6 +430,11 @@
               <FilePath>../Core/Src/uart_protocol.c</FilePath>
             </File>
             <File>
+              <FileName>uart_tx.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/uart_tx.c</FilePath>
+            </File>
+            <File>
               <FileName>oled.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Drivers/OLED/oled.c</FilePath>
@@ -458,6 +463,11 @@
               <FileName>app_init.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/app_init.c</FilePath>
+            </File>
+            <File>
+              <FileName>upper_computer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/upper_computer.c</FilePath>
             </File>
             <File>
               <FileName>main.c</FileName>

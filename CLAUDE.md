@@ -141,4 +141,20 @@ YYYY-MM-DD-HH-MM-type-topic.md
 
 ---
 
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues，外部 PR 也作为 triage 来源。See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+五个标准标签：needs-triage / needs-info / ready-for-agent / ready-for-human / wontfix。See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+单上下文：一个 CONTEXT.md + docs/adr/。See `docs/agents/domain.md`.
+
+---
+
 **记住：一切代码服务硬件。先读手册，再写代码。每写 20 行就验证。**

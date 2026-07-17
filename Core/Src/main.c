@@ -28,6 +28,7 @@
 #include "oscilloscope.h"
 #include "signal_gen.h"
 #include "uart_protocol.h"
+#include "uart_tx.h"
 #include "display.h"
 #include "key_handler.h"
 #include "config.h"
@@ -142,6 +143,29 @@ int main(void)
   MX_USART1_UART_Init();
 
   /* USER CODE BEGIN 2 */
+  /* 初始化 ADC DMA（DMA2_Stream0, Channel 0） */
+  __HAL_RCC_DMA2_CLK_ENABLE();
+  hdma_adc1.Instance = DMA2_Stream0;
+  hdma_adc1.Init.Channel = DMA_CHANNEL_0;
+  hdma_adc1.Init.Direction = DMA_PERIPH_TO_MEMORY;
+  hdma_adc1.Init.PeriphInc = DMA_PINC_DISABLE;
+  hdma_adc1.Init.MemInc = DMA_MINC_ENABLE;
+  hdma_adc1.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
+  hdma_adc1.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
+  hdma_adc1.Init.Mode = DMA_CIRCULAR;
+  hdma_adc1.Init.Priority = DMA_PRIORITY_HIGH;
+  hdma_adc1.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+  if (HAL_DMA_Init(&hdma_adc1) != HAL_OK) {
+    Error_Handler();
+  }
+  __HAL_LINKDMA(&hadc1, DMA_Handle, hdma_adc1);
+
+  /* 配置 DMA2 Stream0 中断优先级 */
+  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
+
+  /* 标记 UART TX 已就绪，允许 printf 输出 */
+  UART_TX_MarkReady();
 
   /* 配置 PA0 为按键输入（下拉，按下为高电平） */
   __HAL_RCC_GPIOA_CLK_ENABLE();
@@ -202,35 +226,35 @@ int main(void)
   /* 创建示波器任务 */
   oscilloscope_task_handle = osThreadNew(Oscilloscope_Task, NULL, &(osThreadAttr_t){
     .name = "Oscilloscope",
-    .stack_size = 512 * 4,
+    .stack_size = 768 * 4,  /* 增加到 3072 字节，原 2048 */
     .priority = (osPriority_t) osPriorityNormal,
   });
 
   /* 创建信号发生器任务 */
   signalgen_task_handle = osThreadNew(SignalGen_Task, NULL, &(osThreadAttr_t){
     .name = "SignalGen",
-    .stack_size = 512 * 4,
+    .stack_size = 768 * 4,  /* 增加到 3072 字节，原 2048 */
     .priority = (osPriority_t) osPriorityNormal,
   });
 
   /* 创建串口协议任务 */
   uart_task_handle = osThreadNew(UART_Task, NULL, &(osThreadAttr_t){
     .name = "UART",
-    .stack_size = 1024 * 4,
+    .stack_size = 1536 * 4,  /* 增加到 6144 字节，原 4096 */
     .priority = (osPriority_t) osPriorityNormal,
   });
 
   /* 创建显示任务 */
   display_task_handle = osThreadNew(Display_Task, NULL, &(osThreadAttr_t){
     .name = "Display",
-    .stack_size = 512 * 4,
+    .stack_size = 768 * 4,  /* 增加到 3072 字节，原 2048 */
     .priority = (osPriority_t) osPriorityNormal,
   });
 
   /* 创建按键任务 */
   key_task_handle = osThreadNew(Key_Task, NULL, &(osThreadAttr_t){
     .name = "Key",
-    .stack_size = 256 * 4,
+    .stack_size = 384 * 4,  /* 增加到 1536 字节，原 1024 */
     .priority = (osPriority_t) osPriorityNormal,
   });
 
