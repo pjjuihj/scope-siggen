@@ -68,11 +68,11 @@ typedef struct {
 /* 版本号定义 */
 #define VERSION_MAJOR      1
 #define VERSION_MINOR      4
-#define VERSION_PATCH      0
+#define VERSION_PATCH      4
 #define VERSION_BUILD      0
 
 /* 版本字符串 */
-#define VERSION_STRING     "1.4.1"
+#define VERSION_STRING     "1.4.4"
 
 /* Git信息（由构建脚本自动填充） */
 #define GIT_COMMIT         "20fa254"

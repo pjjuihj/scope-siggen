@@ -143,37 +143,10 @@ int main(void)
   MX_USART1_UART_Init();
 
   /* USER CODE BEGIN 2 */
-  /* 初始化 ADC DMA（DMA2_Stream0, Channel 0） */
-  __HAL_RCC_DMA2_CLK_ENABLE();
-  hdma_adc1.Instance = DMA2_Stream0;
-  hdma_adc1.Init.Channel = DMA_CHANNEL_0;
-  hdma_adc1.Init.Direction = DMA_PERIPH_TO_MEMORY;
-  hdma_adc1.Init.PeriphInc = DMA_PINC_DISABLE;
-  hdma_adc1.Init.MemInc = DMA_MINC_ENABLE;
-  hdma_adc1.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
-  hdma_adc1.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
-  hdma_adc1.Init.Mode = DMA_CIRCULAR;
-  hdma_adc1.Init.Priority = DMA_PRIORITY_HIGH;
-  hdma_adc1.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
-  if (HAL_DMA_Init(&hdma_adc1) != HAL_OK) {
-    Error_Handler();
-  }
-  __HAL_LINKDMA(&hadc1, DMA_Handle, hdma_adc1);
-
-  /* 配置 DMA2 Stream0 中断优先级 */
-  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
-
   /* 标记 UART TX 已就绪，允许 printf 输出 */
   UART_TX_MarkReady();
 
-  /* 配置 PA0 为按键输入（下拉，按下为高电平） */
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  GPIO_InitTypeDef key_gpio_init = {0};
-  key_gpio_init.Pin = GPIO_PIN_0;
-  key_gpio_init.Mode = GPIO_MODE_INPUT;
-  key_gpio_init.Pull = GPIO_PULLDOWN;
-  HAL_GPIO_Init(GPIOA, &key_gpio_init);
+  /* 按键 GPIO 由 KeyHandler_Init 统一配置 */
 
   /* I2C 连通性检查（仅验证 OLED 在线） */
   uint8_t test_byte = 0x00;
@@ -194,7 +167,7 @@ int main(void)
     App_EnterFallbackMode();
   }
 
-  LOG_INFO("System initialized, boot stage: %s", App_GetBootStageString(boot_stage));
+  LOG_INFO_M(LOG_MODULE_APP, "System initialized, boot stage: %s", App_GetBootStageString(boot_stage));
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -360,7 +333,7 @@ static void MX_ADC1_Init(void)
   }
   /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
   */
-  sConfig.Channel = ADC_CHANNEL_6;
+  sConfig.Channel = ADC_CHANNEL_6;  /* PA6 = ADC 输入 */
   sConfig.Rank = 1;
   sConfig.SamplingTime = ADC_SAMPLETIME_480CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
@@ -655,11 +628,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(led_GPIO_Port, led_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : key_Pin */
-  GPIO_InitStruct.Pin = key_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(key_GPIO_Port, &GPIO_InitStruct);
+  /* 按键 GPIO 由 KeyHandler_Init 配置 */
 
   /*Configure GPIO pin : led_Pin */
   GPIO_InitStruct.Pin = led_Pin;
@@ -668,9 +637,9 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(led_GPIO_Port, &GPIO_InitStruct);
 
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI0_IRQn, 6, 0);
-  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+  /* EXTI interrupt init - 不需要，使用轮询模式 */
+  /* HAL_NVIC_SetPriority(EXTI0_IRQn, 6, 0); */
+  /* HAL_NVIC_EnableIRQ(EXTI0_IRQn); */
 
 }
 

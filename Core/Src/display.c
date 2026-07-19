@@ -17,6 +17,8 @@
 #include "display.h"
 #include "oled.h"
 #include "debug.h"
+#include "ota.h"
+#include "version.h"
 #include "cmsis_os.h"
 #include "FreeRTOS.h"
 #include "task.h"
@@ -26,17 +28,6 @@
 #include <math.h>
 
 /* Private typedef -----------------------------------------------------------*/
-
-/** 显示页面类型 */
-typedef enum {
-    PAGE_SPLASH,        /* 启动画面 */
-    PAGE_OSCOPE,        /* 示波器页面 */
-    PAGE_SIGGEN,        /* 信号发生器页面 */
-    PAGE_SYSINFO,       /* 系统信息页面 */
-    PAGE_MENU,          /* 菜单页面 */
-    PAGE_MESSAGE,       /* 消息页面 */
-    PAGE_COUNT          /* 页面总数（用于指示点） */
-} DisplayPage_t;
 
 /* Private define ------------------------------------------------------------*/
 
@@ -84,6 +75,34 @@ static const MenuItem_t *menu_items  = NULL;
 static uint8_t           menu_count  = 0;
 static uint8_t           menu_select = 0;
 
+/* --- 默认菜单项 --- */
+static void Menu_Oscilloscope(void) {
+    current_page = PAGE_OSCOPE;
+    dirty = true;
+}
+
+static void Menu_SignalGen(void) {
+    current_page = PAGE_SIGGEN;
+    dirty = true;
+}
+
+static void Menu_SysInfo(void) {
+    current_page = PAGE_SYSINFO;
+    dirty = true;
+}
+
+static void Menu_About(void) {
+    Display_ShowMessage("Scope-SigGen v" VERSION_STRING);
+}
+
+static const MenuItem_t default_menu[] = {
+    {"Oscilloscope",  Menu_Oscilloscope},
+    {"Signal Gen",    Menu_SignalGen},
+    {"System Info",   Menu_SysInfo},
+    {"About",         Menu_About}
+};
+static const uint8_t default_menu_count = sizeof(default_menu) / sizeof(default_menu[0]);
+
 /* --- 测量结果 --- */
 static uint32_t measured_vpp = 0;    /* 峰峰值 (mV) */
 static uint32_t measured_period_us = 0;  /* 周期 (µs) */
@@ -106,6 +125,26 @@ static bool     siggen_running = false; /* 运行状态 */
 
 /* --- 消息页面状态 --- */
 static char message_text[32] = "";
+
+/* --- 操作记录 --- */
+#define MAX_LOG_ENTRIES 5
+static char operation_log[MAX_LOG_ENTRIES][22];  /* 每条记录最多21个字符 */
+static uint8_t log_count = 0;
+static uint8_t log_index = 0;  /* 环形缓冲区索引 */
+
+static void Log_Operation(const char *op) {
+    snprintf(operation_log[log_index], sizeof(operation_log[log_index]), "%s", op);
+    log_index = (log_index + 1) % MAX_LOG_ENTRIES;
+    if (log_count < MAX_LOG_ENTRIES) {
+        log_count++;
+    }
+}
+
+/* --- OTA 页面状态 --- */
+static uint8_t ota_progress = 0;
+static char ota_status[32] = "Ready";
+static char ota_error[64] = "";
+static bool ota_complete = false;
 
 /* Private function prototypes -----------------------------------------------*/
 
@@ -538,41 +577,47 @@ static void Render_SysInfo(void)
 
 static void Draw_PageIndicator(void)
 {
-    /* 显示 3 个页面的指示点：示波器/信号发生器/系统信息 */
-    uint8_t dot_y = OLED_HEIGHT - 2;  /* 倒数第二行，避免超出范围 */
-    uint8_t dot_spacing = 16;
-    uint8_t start_x = (OLED_WIDTH - 2 * dot_spacing) / 2;
+    /* 显示页面指示点：覆盖全部 7 个页面 */
+    uint8_t dot_y = OLED_HEIGHT - 2;
+    uint8_t dot_spacing = 18;
+    uint8_t start_x = (OLED_WIDTH - 6 * dot_spacing) / 2;
 
-    /* 第一个点：示波器页面 */
-    uint8_t x1 = start_x;
-    if (current_page == PAGE_OSCOPE) {
-        OLED_FillRect(x1 - 1, dot_y - 1, 3, 3, 1);
-    } else {
-        OLED_DrawPoint(x1, dot_y, 1);
-    }
+    /* 定义页面和对应的指示点位置 */
+    struct {
+        uint8_t page;
+        uint8_t x;
+    } pages[] = {
+        {PAGE_SPLASH, start_x},
+        {PAGE_OSCOPE, start_x + dot_spacing},
+        {PAGE_SIGGEN, start_x + 2 * dot_spacing},
+        {PAGE_SYSINFO, start_x + 3 * dot_spacing},
+        {PAGE_MENU, start_x + 4 * dot_spacing},
+        {PAGE_MESSAGE, start_x + 5 * dot_spacing},
+        {PAGE_OTA, start_x + 6 * dot_spacing}
+    };
 
-    /* 第二个点：信号发生器页面 */
-    uint8_t x2 = start_x + dot_spacing;
-    if (current_page == PAGE_SIGGEN) {
-        OLED_FillRect(x2 - 1, dot_y - 1, 3, 3, 1);
-    } else {
-        OLED_DrawPoint(x2, dot_y, 1);
-    }
-
-    /* 第三个点：系统信息页面 */
-    uint8_t x3 = start_x + 2 * dot_spacing;
-    if (current_page == PAGE_SYSINFO) {
-        OLED_FillRect(x3 - 1, dot_y - 1, 3, 3, 1);
-    } else {
-        OLED_DrawPoint(x3, dot_y, 1);
+    /* 绘制指示点 */
+    for (uint8_t i = 0; i < 7; i++) {
+        if (current_page == pages[i].page) {
+            OLED_FillRect(pages[i].x - 1, dot_y - 1, 3, 3, 1);
+        } else {
+            OLED_DrawPoint(pages[i].x, dot_y, 1);
+        }
     }
 }
 
 static void Render_Menu(void)
 {
-    if (menu_items == NULL || menu_count == 0) return;
+    /* 使用默认菜单或已设置的菜单 */
+    const MenuItem_t *items = menu_items;
+    uint8_t count = menu_count;
 
-    for (uint8_t i = 0; i < menu_count; i++) {
+    if (items == NULL || count == 0) {
+        items = default_menu;
+        count = default_menu_count;
+    }
+
+    for (uint8_t i = 0; i < count; i++) {
         /* 菜单项 Y 坐标检查（每项占 2 页，8 页总共 4 项） */
         if (i * 2 >= OLED_HEIGHT / 8) break;
 
@@ -581,17 +626,109 @@ static void Render_Menu(void)
             OLED_ShowString(0, i * 2, (u8 *)">", 12, 1);
             x = 12;
         }
-        OLED_ShowString(x, i * 2, (u8 *)menu_items[i].text, 12, 1);
+        OLED_ShowString(x, i * 2, (u8 *)items[i].text, 12, 1);
     }
 }
 
 static void Render_Message(void)
 {
-    if (message_text[0] == '\0') return;
+    if (message_text[0] != '\0') {
+        /* 临时消息显示 */
+        uint16_t x = (OLED_WIDTH - strlen(message_text) * 8) / 2;
+        if (x > OLED_WIDTH) x = 0;
+        OLED_ShowString(x, 3, (u8 *)message_text, 16, 1);
+        return;
+    }
 
-    uint16_t x = (OLED_WIDTH - strlen(message_text) * 8) / 2;
-    if (x > OLED_WIDTH) x = 0;
-    OLED_ShowString(x, 3, (u8 *)message_text, 16, 1);
+    /* 操作记录显示 */
+    OLED_ShowString(0, 0, (u8 *)">> Log", 12, 1);
+
+    if (log_count == 0) {
+        OLED_ShowString(0, 2, (u8 *)"No records", 12, 1);
+        return;
+    }
+
+    /* 显示最近的操作记录（最新的在上面） */
+    uint8_t start = (log_index + MAX_LOG_ENTRIES - log_count) % MAX_LOG_ENTRIES;
+    for (uint8_t i = 0; i < log_count && i < 4; i++) {
+        uint8_t idx = (start + i) % MAX_LOG_ENTRIES;
+        OLED_ShowString(0, (i + 1) * 2, (u8 *)operation_log[idx], 12, 1);
+    }
+}
+
+static void Render_OTA(void)
+{
+    char buf1[22];
+    char buf2[22];
+
+    /* OLED 128x64, 字体 6x8, 标准布局 */
+
+    /* 第0行(y=0): 标题 - 居中 */
+    const char *title = "OTA Update";
+    uint16_t title_len = strlen(title) * 6;
+    uint16_t title_x = (OLED_WIDTH - title_len) / 2;
+    OLED_ShowString(title_x, 0, (u8 *)title, 8, 1);
+
+    /* 第1行(y=1): 状态 - 居中 (Ready/Receiving/Verifying等) */
+    snprintf(buf1, sizeof(buf1), "%s", ota_status);
+    uint16_t status_len = strlen(buf1) * 6;
+    uint16_t status_x = (OLED_WIDTH - status_len) / 2;
+    OLED_ShowString(status_x, 1, (u8 *)buf1, 8, 1);
+
+    /* 第2行(y=3): 进度条 - 居中，有边距 */
+    uint16_t bar_margin = 16;
+    uint16_t bar_x = bar_margin;
+    uint16_t bar_y = 24;  /* 像素坐标：y=3 * 8 = 24 */
+    uint16_t bar_width = OLED_WIDTH - (bar_margin * 2);
+    uint16_t bar_height = 6;
+
+    /* 先绘制进度条边框 */
+    OLED_DrawLine(bar_x, bar_y, bar_x + bar_width, bar_y, 1);
+    OLED_DrawLine(bar_x, bar_y + bar_height, bar_x + bar_width, bar_y + bar_height, 1);
+    OLED_DrawLine(bar_x, bar_y, bar_x, bar_y + bar_height, 1);
+    OLED_DrawLine(bar_x + bar_width, bar_y, bar_x + bar_width, bar_y + bar_height, 1);
+
+    /* 绘制进度填充 */
+    uint16_t fill_width = (bar_width * ota_progress) / 100;
+    for (uint16_t x = bar_x + 1; x < bar_x + fill_width; x++) {
+        for (uint16_t y = bar_y + 1; y < bar_y + bar_height; y++) {
+            OLED_DrawPoint(x, y, 1);
+        }
+    }
+
+    /* 第3行(y=4): 进度百分比 - 居中 */
+    snprintf(buf2, sizeof(buf2), "%d%%", ota_progress);
+    uint16_t pct_len = strlen(buf2) * 6;
+    uint16_t pct_x = (OLED_WIDTH - pct_len) / 2;
+    OLED_ShowString(pct_x, 4, (u8 *)buf2, 8, 1);
+
+    /* 第4行(y=5): 错误信息或连接状态 - 居中 */
+    if (ota_error[0] != '\0') {
+        snprintf(buf2, sizeof(buf2), "%s", ota_error);
+        uint16_t err_len = strlen(buf2) * 6;
+        uint16_t err_x = (OLED_WIDTH - err_len) / 2;
+        OLED_ShowString(err_x, 5, (u8 *)buf2, 8, 1);
+    } else {
+        OTA_Config_t ota_cfg;
+        OTA_GetStatus(&ota_cfg);
+        snprintf(buf2, sizeof(buf2), "PC: %s", ota_cfg.pc_connected ? "Connected" : "Waiting");
+        uint16_t conn_len = strlen(buf2) * 6;
+        uint16_t conn_x = (OLED_WIDTH - conn_len) / 2;
+        OLED_ShowString(conn_x, 5, (u8 *)buf2, 8, 1);
+    }
+}
+
+/**
+  * @brief  清除波形区域（只清波形区，不清整个屏）
+  */
+static void Clear_Waveform_Area(void)
+{
+    /* 波形区域：Y=WAVEFORM_Y_TOP+1 到 Y=WAVEFORM_Y_BOTTOM-1 */
+    for (uint16_t y = WAVEFORM_Y_TOP + 1; y < WAVEFORM_Y_BOTTOM; y++) {
+        for (uint16_t x = 1; x < OLED_WIDTH - 1; x++) {
+            OLED_DrawPoint(x, y, 0);
+        }
+    }
 }
 
 /**
@@ -599,26 +736,46 @@ static void Render_Message(void)
   */
 static void Render_Frame(void)
 {
-    OLED_Clear();
-
     switch (current_page) {
     case PAGE_SPLASH:
+        OLED_Clear();
         Render_Splash();
         break;
     case PAGE_OSCOPE:
-        Render_Scope();
+        /* 示波器页面：只清波形区域，保留网格/边框/测量值 */
+        Clear_Waveform_Area();
+        Draw_Grid();
+        Draw_TriggerLevel();
+        Draw_Waveform();
+        Draw_Measurements();
+        Draw_Cursor();
+        Draw_StatusBar();
+        Draw_PageIndicator();
         break;
     case PAGE_SIGGEN:
+        OLED_Clear();
         Render_SigGen();
+        Draw_PageIndicator();
         break;
     case PAGE_SYSINFO:
+        OLED_Clear();
         Render_SysInfo();
+        Draw_PageIndicator();
         break;
     case PAGE_MENU:
+        OLED_Clear();
         Render_Menu();
+        Draw_PageIndicator();
         break;
     case PAGE_MESSAGE:
+        OLED_Clear();
         Render_Message();
+        Draw_PageIndicator();
+        break;
+    case PAGE_OTA:
+        OLED_Clear();
+        Render_OTA();
+        Draw_PageIndicator();
         break;
     }
 
@@ -632,6 +789,7 @@ ErrorCode_t Display_Init(void)
     LOG_INFO("Initializing display module...");
 
     OLED_Init();
+    OLED_DisplayTurn(0);  /* 正常显示方向 */
     memset(OLED_GRAM, 0, sizeof(OLED_GRAM));
 
     current_page = PAGE_SPLASH;
@@ -740,7 +898,10 @@ ErrorCode_t Display_DrawWaveform(uint16_t *data, uint16_t len)
     waveform_data = data;
     waveform_len  = len;
     waveform_valid = true;
-    current_page   = PAGE_OSCOPE;
+    /* 只在非 OTA 模式时切换到示波器页面 */
+    if (current_page != PAGE_OTA) {
+        current_page = PAGE_OSCOPE;
+    }
     dirty = true;
 
     return ERR_OK;
@@ -753,7 +914,10 @@ ErrorCode_t Display_UpdateScope(uint16_t *data, uint16_t len,
         return ERR_INVALID_PARAM;
     }
 
-    /* 调试输出已禁用（避免干扰命令接收） */
+    /* 如果当前是 OTA 页面，不更新示波器数据 */
+    if (current_page == PAGE_OTA) {
+        return ERR_OK;
+    }
 
     /* 原子更新全部示波器数据，避免 Display_Task 读到新旧混合值 */
     OLED_Lock();
@@ -851,12 +1015,57 @@ ErrorCode_t Display_UpdateSelection(uint8_t selected)
 {
     if (!initialized) return ERR_NOT_INIT;
 
-    if (selected < menu_count) {
-        menu_select = selected;
-        dirty = true;
+    /* 使用默认菜单或已设置的菜单 */
+    uint8_t count = menu_count;
+    if (count == 0) {
+        count = default_menu_count;
+    }
+
+    /* 处理环绕 */
+    if (selected >= count) {
+        selected = 0;  /* 超出范围时回到第一个 */
+    }
+
+    menu_select = selected;
+    dirty = true;
+
+    return ERR_OK;
+}
+
+DisplayPage_t Display_GetCurrentPage(void)
+{
+    return current_page;
+}
+
+uint8_t Display_GetMenuSelect(void)
+{
+    return menu_select;
+}
+
+ErrorCode_t Display_SelectMenuItem(void)
+{
+    if (!initialized) return ERR_NOT_INIT;
+
+    /* 使用默认菜单或已设置的菜单 */
+    const MenuItem_t *items = menu_items;
+    uint8_t count = menu_count;
+
+    if (items == NULL || count == 0) {
+        items = default_menu;
+        count = default_menu_count;
+    }
+
+    if (menu_select < count && items[menu_select].callback != NULL) {
+        items[menu_select].callback();
     }
 
     return ERR_OK;
+}
+
+void Display_LogOperation(const char *op)
+{
+    if (op == NULL) return;
+    Log_Operation(op);
 }
 
 void Display_Task(void *argument)
@@ -1015,6 +1224,64 @@ ErrorCode_t Display_SetCursorEnabled(bool enabled)
     if (!initialized) return ERR_NOT_INIT;
 
     show_cursor = enabled;
+    dirty = true;
+
+    return ERR_OK;
+}
+
+ErrorCode_t Display_ShowOTA(void)
+{
+    if (!initialized) return ERR_NOT_INIT;
+
+    OLED_Lock();
+    current_page = PAGE_OTA;
+    ota_progress = 0;
+    snprintf(ota_status, sizeof(ota_status), "Ready");
+    ota_error[0] = '\0';
+    ota_complete = false;
+    dirty = true;
+    OLED_Unlock();
+
+    return ERR_OK;
+}
+
+ErrorCode_t Display_UpdateOTAProgress(uint8_t progress, const char *status)
+{
+    if (!initialized) return ERR_NOT_INIT;
+
+    ota_progress = progress;
+    if (status != NULL) {
+        snprintf(ota_status, sizeof(ota_status), "%s", status);
+    }
+
+    /* OTA 模式下强制刷新，不等待 */
+    OLED_Lock();
+    Render_OTA();
+    OLED_Unlock();
+
+    return ERR_OK;
+}
+
+ErrorCode_t Display_ShowOTAError(const char *error)
+{
+    if (!initialized) return ERR_NOT_INIT;
+
+    if (error != NULL) {
+        snprintf(ota_error, sizeof(ota_error), "%s", error);
+    }
+    snprintf(ota_status, sizeof(ota_status), "Error");
+    dirty = true;
+
+    return ERR_OK;
+}
+
+ErrorCode_t Display_ShowOTAComplete(void)
+{
+    if (!initialized) return ERR_NOT_INIT;
+
+    ota_progress = 100;
+    snprintf(ota_status, sizeof(ota_status), "Complete");
+    ota_complete = true;
     dirty = true;
 
     return ERR_OK;

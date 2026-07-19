@@ -36,7 +36,8 @@ typedef enum {
     KEY_RIGHT,
     KEY_ENTER,
     KEY_BACK,
-    KEY_MENU
+    KEY_MENU,
+    KEY_SELECT
 } KeyCode_t;
 
 /**

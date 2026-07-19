@@ -49,11 +49,16 @@ ErrorCode_t KeyHandler_Init(void)
 {
     LOG_INFO("Initializing key handler module...");
 
-    /* 配置 PA0 为按键输入（上拉） */
+    /* 配置 PA0 为按键输入 */
     __HAL_RCC_GPIOA_CLK_ENABLE();
-
     GPIO_InitTypeDef gpio_init = {0};
     gpio_init.Pin = GPIO_PIN_0;
+    gpio_init.Mode = GPIO_MODE_INPUT;
+    gpio_init.Pull = GPIO_PULLDOWN;  /* 按下为高电平 */
+    HAL_GPIO_Init(GPIOA, &gpio_init);
+
+    /* 配置 PA1 为按键输入 */
+    gpio_init.Pin = GPIO_PIN_1;
     gpio_init.Mode = GPIO_MODE_INPUT;
     gpio_init.Pull = GPIO_PULLDOWN;  /* 按下为高电平 */
     HAL_GPIO_Init(GPIOA, &gpio_init);
@@ -64,7 +69,7 @@ ErrorCode_t KeyHandler_Init(void)
     key_long_press = false;
 
     initialized = true;
-    LOG_INFO("Key handler module initialized (PA0 input)");
+    LOG_INFO("Key handler module initialized (PA0 + PA1 input)");
     return ERR_OK;
 }
 
@@ -174,18 +179,18 @@ void Key_Task(void *argument)
 static KeyCode_t Key_ReadHardware(void)
 {
     /* 读取GPIO状态 */
-    /* 注意：这里需要根据实际的硬件连接进行调整 */
+    GPIO_PinState pa0 = HAL_GPIO_ReadPin(key_GPIO_Port, key_Pin);
+    GPIO_PinState pa1 = HAL_GPIO_ReadPin(key2_GPIO_Port, key2_Pin);
 
-    /* PA0 = 按键输入 */
-    if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_SET) {
-        return KEY_ENTER;  /* 假设PA0是确认键 */
+    /* PA0 = 页面切换键（按下为高电平） */
+    if (pa0 == GPIO_PIN_SET) {
+        return KEY_ENTER;  /* 切换页面 */
     }
 
-    /* TODO: 添加其他按键的读取 */
-    /* PB3 = KEY_UP */
-    /* PB4 = KEY_DOWN */
-    /* PB5 = KEY_LEFT */
-    /* PB6 = KEY_RIGHT */
+    /* PA1 = 菜单选择键（按下为高电平） */
+    if (pa1 == GPIO_PIN_SET) {
+        return KEY_SELECT;  /* 选择菜单项 */
+    }
 
     return KEY_NONE;
 }

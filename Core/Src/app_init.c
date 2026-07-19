@@ -100,9 +100,7 @@ BootStage_t App_Init(void)
     }
 
     /* 阶段5: 显示启动信息 */
-    Display_ShowMessage("SCOPE-SIGGEN");
     Display_ShowStatus("Ready");
-    Display_ForceUpdate();
 
     /* 阶段6: 就绪 */
     current_boot_stage = BOOT_STAGE_READY;
@@ -332,16 +330,41 @@ static void App_KeyCallback(KeyCode_t key)
 {
     LOG_INFO("Key callback: %d", key);
 
+    /* KEY_ENTER (PA0) */
     if (key == KEY_ENTER) {
-        if (Key_IsLastPressLong()) {
-            /* 长按：保存配置到 Flash */
-            Config_Save();
-            Display_ShowMessage("Config Saved");
-            LOG_INFO("Config saved by key");
+        if (Display_GetCurrentPage() == PAGE_MENU) {
+            if (Key_IsLastPressLong()) {
+                /* 菜单页面长按：确认选择 */
+                Display_SelectMenuItem();
+                Display_LogOperation("Menu: SELECT");
+            } else {
+                /* 菜单页面短按：切换页面 */
+                Display_NextPage();
+                Display_LogOperation("Page switch");
+            }
         } else {
-            /* 短按：切换页面 */
-            Display_NextPage();
-            LOG_INFO("Page switched by key");
+            if (Key_IsLastPressLong()) {
+                /* 长按：保存配置到 Flash */
+                Config_Save();
+                Display_ShowMessage("Config Saved");
+                Display_LogOperation("Config saved");
+                LOG_INFO("Config saved by key");
+            } else {
+                /* 短按：切换页面 */
+                Display_NextPage();
+                Display_LogOperation("Page switch");
+                LOG_INFO("Page switched by key");
+            }
         }
+        return;
+    }
+
+    /* KEY_SELECT (PA1) = 菜单中移动选择 */
+    if (key == KEY_SELECT) {
+        if (Display_GetCurrentPage() == PAGE_MENU) {
+            Display_UpdateSelection(Display_GetMenuSelect() + 1);
+            Display_LogOperation("Menu: NEXT");
+        }
+        return;
     }
 }

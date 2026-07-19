@@ -41,6 +41,20 @@ typedef struct {
     void (*callback)(void);
 } MenuItem_t;
 
+/**
+  * @brief 显示页面类型
+  */
+typedef enum {
+    PAGE_SPLASH,        /* 启动画面 */
+    PAGE_OSCOPE,        /* 示波器页面 */
+    PAGE_SIGGEN,        /* 信号发生器页面 */
+    PAGE_SYSINFO,       /* 系统信息页面 */
+    PAGE_MENU,          /* 菜单页面 */
+    PAGE_MESSAGE,       /* 消息页面 */
+    PAGE_OTA,           /* OTA 更新页面 */
+    PAGE_COUNT          /* 页面总数 */
+} DisplayPage_t;
+
 /* Exported constants --------------------------------------------------------*/
 
 /* 显示尺寸 */
@@ -156,6 +170,31 @@ ErrorCode_t Display_ShowMenu(const MenuItem_t *menu, uint8_t count);
 ErrorCode_t Display_UpdateSelection(uint8_t selected);
 
 /**
+  * @brief  获取当前页面
+  * @retval 当前页面类型
+  */
+DisplayPage_t Display_GetCurrentPage(void);
+
+/**
+  * @brief  获取当前菜单选中项
+  * @retval 当前选中的菜单项索引
+  */
+uint8_t Display_GetMenuSelect(void);
+
+/**
+  * @brief  选择当前菜单项
+  * @retval 错误码
+  */
+ErrorCode_t Display_SelectMenuItem(void);
+
+/**
+  * @brief  记录操作到日志
+  * @param  op: 操作描述字符串
+  * @retval None
+  */
+void Display_LogOperation(const char *op);
+
+/**
   * @brief  显示任务
   * @param  argument: 任务参数
   * @retval None
@@ -239,6 +278,33 @@ ErrorCode_t Display_MoveCursor(uint16_t x, uint16_t y);
   * @retval 错误码
   */
 ErrorCode_t Display_SetCursorEnabled(bool enabled);
+
+/**
+  * @brief  显示 OTA 更新页面
+  * @retval 错误码
+  */
+ErrorCode_t Display_ShowOTA(void);
+
+/**
+  * @brief  更新 OTA 进度显示
+  * @param  progress: 进度 (0-100)
+  * @param  status: 状态字符串
+  * @retval 错误码
+  */
+ErrorCode_t Display_UpdateOTAProgress(uint8_t progress, const char *status);
+
+/**
+  * @brief  显示 OTA 错误信息
+  * @param  error: 错误信息
+  * @retval 错误码
+  */
+ErrorCode_t Display_ShowOTAError(const char *error);
+
+/**
+  * @brief  显示 OTA 完成信息
+  * @retval 错误码
+  */
+ErrorCode_t Display_ShowOTAComplete(void);
 
 #ifdef __cplusplus
 }

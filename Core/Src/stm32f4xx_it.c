@@ -182,6 +182,17 @@ void EXTI0_IRQHandler(void)
   /* USER CODE END EXTI0_IRQn 1 */
 }
 
+void EXTI1_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI1_IRQn 0 */
+
+  /* USER CODE END EXTI1_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(key2_Pin);
+  /* USER CODE BEGIN EXTI1_IRQn 1 */
+
+  /* USER CODE END EXTI1_IRQn 1 */
+}
+
 /**
   * @brief This function handles ADC1, ADC2 and ADC3 global interrupts.
   */
@@ -286,9 +297,11 @@ void TIM6_DAC_IRQHandler(void)
 /* USER CODE BEGIN 1 */
 
 /* ADC完成回调函数（DMA传输完成：后半段就绪） */
+volatile uint32_t adc_cplt_count = 0;
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
     if (hadc->Instance == ADC1) {
+        adc_cplt_count++;
         /* 设置可处理数据指针（后半段） */
         extern uint16_t adc_buffer[];
         extern volatile uint16_t *process_ptr;
@@ -310,9 +323,11 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 }
 
 /* ADC半传输回调函数（DMA半传输完成：前半段就绪） */
+volatile uint32_t adc_half_count = 0;
 void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)
 {
     if (hadc->Instance == ADC1) {
+        adc_half_count++;
         /* 设置可处理数据指针（前半段） */
         extern uint16_t adc_buffer[];
         extern volatile uint16_t *process_ptr;
