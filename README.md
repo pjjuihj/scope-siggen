@@ -1,6 +1,6 @@
 # Scope-SigGen
 
-**STM32F4 示波器 + 信号发生器** — 基于 STM32F411 的便携式测量工具
+**STM32F4 示波器 + 信号发生器** — 基于 STM32F407 的便携式测量工具
 
 [![Version](https://img.shields.io/badge/version-v1.4.4-blue)](docs/CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
